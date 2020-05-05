@@ -1,8 +1,11 @@
 import os
+import re
 from tweepy import Cursor
 from tweepy import API
 from tweepy import OAuthHandler
 import pandas as pd
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 
 # function to get the authentication with the given credentials
 def get_twitter_authentication():
@@ -46,7 +49,6 @@ def get_twitter_data(search_query, number_of_tweets, geocode, date_before):
     return tweet_objects
 
 # function to convert the list of objects to a pandas dataframe
-# each row of the CSV file contain all the information of single item of the passed array of objects
 def get_converted_dataframe(tweet_objects):
     df = pd.DataFrame()
     prev_attr = "tweet"
@@ -56,6 +58,7 @@ def get_converted_dataframe(tweet_objects):
         df = pd.concat([df, df_row], ignore_index=True, sort=False)
     return df
 
+# function that append value into the dataframe recursively
 def add_to_df(obj, pre_attr, df_row):
     for attr, value in obj.items():
         if type(value) is object:
@@ -65,6 +68,19 @@ def add_to_df(obj, pre_attr, df_row):
         else:
             df_row[pre_attr + attr] = value
     return df_row
+
+# function to preprocess the given tweet data
+def clean_tweets(tweet_text):
+    tweet_text = tweet_text.lower() # normalizing
+    tweet_text = remove_noise(tweet_text) # removing noise
+    tweet_text = word_tokenize(tweet_text) # tokening the text
+    return tweet_text
+
+def remove_noise(tweet_text):
+    tweet_text = re.sub('((www\.[^\s]+)|(https?://[^\s]+))', 'URL', tweet_text)
+    tweet_text = re.sub('@[^\s]+', 'AT_USER', tweet_text)
+    tweet_text = re.sub(r'#([^\s]+)', r'\1', tweet_text)
+    return tweet_text
 
 if __name__ == "__main__":
     # define arguments to pass
@@ -84,4 +100,15 @@ if __name__ == "__main__":
     writer = pd.ExcelWriter('tweets.xlsx', engine='xlsxwriter')
     df.to_excel(writer, sheet_name='Twitter data')
     writer.save
+
+    # handle missing values
+    df = df.fillna("undefined") # fill missing values
+
+    # extracting id and the text field from the data frame
+    df_text = df[['tweet_id', 'tweet_text']]
+
+    # Clean textual data
+    df_text['tweet_text'] = df_text['tweet_text'].applymap(lambda x: clean_tweets(x))
+
+    
     
